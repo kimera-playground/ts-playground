@@ -24,15 +24,24 @@ async function main() {
     }
 }
 
-function getRandomInt(max) {
-    return Math.floor(Math.random() * max);
-}  
-
 function Process(workerID: Number) {
     return new Promise(r => setTimeout(() => {
         console.log(`Processsing item ${workerID}`);
         r(true);
-    }, getRandomInt(1000)));
+    }, 1000));
 }
 
 await main();
+
+// Simpler version
+function ProcessItems(max: number){
+    let currentRunning = 0;
+    const exec = async() => {
+        if(currentRunning == max) return;
+        await Process(currentRunning++);
+        return exec();
+    }
+    const workers = Array.from({ length: 5}, exec);
+    return Promise.all(workers);
+}
+

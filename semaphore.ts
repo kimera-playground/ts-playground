@@ -1,67 +1,46 @@
 export {}
 
-interface Worker {
-    Resolver: (_: any) => void,
-    Task: <T>() => Promise<T>
-}
+class Semaphore {
+    private max: number = 0;
+    private locks: CallableFunction[] = []
 
-class Semaphore{
-    Pool: Array<Worker>
-    MaxConcurrency: number
-    Executing: number
-
-    constructor(concurrency: number) {
-        this.Executing = 0;
-        this.MaxConcurrency = concurrency;
-        this.Pool = new Array();
+    constructor(limit: number){
+        this.max = limit;
     }
-
-    addTask(task: <T>() => Promise<T>) {
+    
+    async acquire() { 
+        if (this.max > 0) {
+            this.max--;
+            return Promise.resolve();
+        }
         return new Promise(resolve => {
-            this.Pool.push({
-                Task: task,
-                Resolver: resolve
-            })
-
-            this.execute();
+            this.locks.push(resolve);
         })
     }
 
-    private execute() {
-        if (this.Pool.length === 0) return;
-        if (this.Executing >= this.MaxConcurrency) return;
+    async release() {
+        const next = this.locks.shift();
+        next?.();
+    }
+}
 
-        const { Task, Resolver } = this.Pool.shift() as Worker;
+async function Process(workerID: string) {
+    return new Promise(r => setTimeout(() => {
+        console.log(`Processsing item ${workerID}`);
+        r(true);
+    }, 1000));
+}
 
-        this.Executing++;
-        Task().then(Resolver).finally(() => {
-            this.Executing--;
-            this.execute();
+async function mainS() {
+    const tasks = [...new Array(10)];
+    const semaphore = new Semaphore(2);
+
+    await Promise.all(tasks.map(async (_, i) => {
+        await semaphore.acquire();
+        return Process(i.toString()).finally(() => {
+            semaphore.release();
         });
-    }
+    }))
 }
 
-function getRandomInt(max) {
-    return Math.floor(Math.random() * max);
-}
-
-async function main() {
-    const tasks = new Array(100);
-    const pool = new Semaphore(25);
-
-    for (const _ of tasks) {
-        pool.addTask(() => Process()).then(i =>   console.log("Processed Item " + i));
-    }
-}
-
-
-
-function Process(): Promise<any> {
-    return new Promise(resolve => {
-        setTimeout(() => {
-            resolve(getRandomInt(200));
-        }, 1000);
-    });
-}
-
-await main();
+await mainS();
